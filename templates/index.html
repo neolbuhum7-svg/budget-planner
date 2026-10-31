@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Budget Planner</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>💰 Budget Planner</h1>
+    <form method="get" class="month-picker">
+      <label for="month">Month</label>
+      <input type="month" id="month" name="month" value="{{ month }}" onchange="this.form.submit()">
+    </form>
+  </header>
+
+  <main class="container">
+    <!-- Summary cards -->
+    <section class="cards">
+      <div class="card income"><span>Income</span><strong>{{ income|money }}</strong></div>
+      <div class="card expense"><span>Expenses</span><strong>{{ expense|money }}</strong></div>
+      <div class="card balance {{ 'neg' if balance < 0 else '' }}"><span>Balance</span><strong>{{ balance|money }}</strong></div>
+    </section>
+
+    <div class="grid">
+      <!-- Add transaction -->
+      <section class="panel">
+        <h2>Add Transaction</h2>
+        <form method="post" action="{{ url_for('add_transaction') }}" class="form">
+          <input type="text" name="title" placeholder="Description (e.g. Groceries)" required>
+          <input type="number" name="amount" placeholder="Amount" step="0.01" min="0.01" required>
+          <div class="row">
+            <select name="type">
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+            </select>
+            <select name="category">
+              {% for c in categories %}<option>{{ c }}</option>{% endfor %}
+            </select>
+          </div>
+          <input type="date" name="date" value="{{ today }}" required>
+          <button type="submit">Add</button>
+        </form>
+      </section>
+
+      <!-- Chart -->
+      <section class="panel">
+        <h2>Spending by Category</h2>
+        {% if spent_by_category %}
+          <canvas id="spendChart" height="220"></canvas>
+        {% else %}
+          <p class="muted">No expenses this month yet.</p>
+        {% endif %}
+      </section>
+
+      <!-- Budgets -->
+      <section class="panel">
+        <h2>Category Budgets</h2>
+        <form method="post" action="{{ url_for('set_budget') }}" class="form row">
+          <input type="hidden" name="month" value="{{ month }}">
+          <select name="category">
+            {% for c in categories %}<option>{{ c }}</option>{% endfor %}
+          </select>
+          <input type="number" name="limit_amount" placeholder="Monthly limit" step="0.01" min="1" required>
+          <button type="submit">Set</button>
+        </form>
+
+        {% for b in budget_rows %}
+          <div class="budget">
+            <div class="budget-head">
+              <span>{{ b.category }}</span>
+              <span>{{ b.spent|money }} / {{ b.limit|money }}</span>
+              <form method="post" action="{{ url_for('delete_budget', category=b.category) }}">
+                <input type="hidden" name="month" value="{{ month }}">
+                <button class="icon" title="Remove budget">✕</button>
+              </form>
+            </div>
+            <div class="bar">
+              <div class="fill {{ 'over' if b.percent > 100 else ('warn' if b.percent > 80 else '') }}"
+                   style="width: {{ [b.percent, 100]|min }}%"></div>
+            </div>
+            {% if b.percent > 100 %}<small class="over-text">Over budget by {{ (b.spent - b.limit)|money }}</small>{% endif %}
+          </div>
+        {% else %}
+          <p class="muted">No budgets set. Pick a category and add a limit.</p>
+        {% endfor %}
+      </section>
+
+      <!-- Transactions -->
+      <section class="panel wide">
+        <h2>Transactions</h2>
+        {% if transactions %}
+        <table>
+          <thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="r">Amount</th><th></th></tr></thead>
+          <tbody>
+          {% for t in transactions %}
+            <tr>
+              <td>{{ t.date }}</td>
+              <td>{{ t.title }}</td>
+              <td><span class="tag">{{ t.category }}</span></td>
+              <td class="r {{ t.type }}">{{ '+' if t.type == 'income' else '-' }}{{ t.amount|money }}</td>
+              <td>
+                <form method="post" action="{{ url_for('delete_transaction', tx_id=t.id) }}">
+                  <input type="hidden" name="month" value="{{ month }}">
+                  <button class="icon" title="Delete">🗑</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+          <p class="muted">No transactions for this month.</p>
+        {% endif %}
+      </section>
+    </div>
+  </main>
+
+  <script>
+    window.SPENDING = {{ spent_by_category|tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
